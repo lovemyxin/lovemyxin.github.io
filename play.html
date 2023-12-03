@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport"
+			content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no" />
+		<title></title>
+		<script src="js/mui.min.js"></script>
+		<link href="css/mui.min.css" rel="stylesheet" />
+		<script type="text/javascript" charset="utf-8">
+			mui.init();
+		</script>
+		<script src="js/hls.js"></script>
+	</head>
+	<body>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				scrollbar-width: none;
+				/* Firefox */
+				-ms-overflow-style: none;
+			}
+
+
+			/* IE 10+ */
+			::-webkit-scrollbar {
+				display: none;
+				/* Chrome Safari */
+			}
+
+
+			html,
+			body,
+			.mui-content,
+			a {
+				background-color: black;
+				color: white;
+			}
+
+			#video {
+				width: 100vw;
+				height: 75vw;
+				position: fixed;
+				z-index: 1000;
+			}
+
+			.bl-container {
+				position: absolute;
+				left: 0;
+				top: 75vw;
+			}
+
+			.bl-videos {
+				position: flex;
+			}
+
+			.bl-card {
+				width: 47vw;
+				height: 35vw;
+				float: left;
+				margin-left: 2vw;
+			}
+
+
+			img {
+				width: 100%;
+				height: 65%;
+			}
+
+			.bl-title {
+				width: 100%;
+				height: 35%;
+				font-size: 12px;
+			}
+
+			span {
+				color: white;
+			}
+		</style>
+		<div class="mui-content">
+
+			<video id="video" controls style="display: none;" autoplay></video>
+			<div class="bl-container">
+				<div id="bl-videos">
+				</div>
+			</div>
+		</div>
+		<nav class="mui-bar mui-bar-tab">
+			<a class="mui-tab-item mui-active">
+				<span class="mui-tab-label"> &lt;&lt;</span>
+			</a>
+			<a class="mui-tab-item">
+				<span class="mui-tab-label" id="page">1</span>
+			</a>
+			<a class="mui-tab-item">
+				<span class="mui-tab-label">&gt;&gt;</span>
+			</a>
+			<a class="mui-tab-item">
+				<span class="mui-tab-label">跳转</span>
+			</a>
+			<a class="mui-tab-item">
+				<span class="mui-tab-label">收展</span>
+			</a>
+		</nav>
+	</body>
+</html>
+<script>
+	"use strict";
+
+	let firstPage = 1;
+	let tailPage = 2;
+	let nowPage;
+
+
+	getFirstAndTailPage();
+	setTimeout(() => {
+		nowPage = getPage();
+		getJson(nowPage);
+	}, 1000);
+	let m3u8AndTitle = getM3u8AndTitle();
+	if (m3u8AndTitle != null && m3u8AndTitle.length == 2) {
+		let m3u8 = m3u8AndTitle[0],
+			title = m3u8AndTitle[1];
+		selectVideo(m3u8, title);
+	}
+
+	function getFirstAndTailPage() {
+		let xml = new XMLHttpRequest();
+		xml.open("get", "json/page.txt", false);
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4 && xml.status == 200) {
+				let result = JSON.parse(xml.responseText);
+				firstPage = result.firstPage;
+				tailPage = result.tailPage;
+			}
+		};
+		xml.send();
+	}
+
+	function getM3u8AndTitle() {
+		let cookies = document.cookie.split(";");
+		let m3u8 = "";
+		let title = "";
+		for (let i = 0; i < cookies.length; i++) {
+			if (cookies[i].trim().startsWith("m3u8=")) {
+				m3u8 = cookies[i].split('=')[1];
+			} else if (cookies[i].trim().startsWith("title=")) {
+				title = cookies[i].split('=')[1];
+			}
+		}
+		return [m3u8, title];
+	}
+
+	function selectVideo(m3u8, title) {
+		try {
+			let hours = 10000;
+			document.cookie = `m3u8=${m3u8};expires=${new Date((new Date()).getTime() + hours * 3600000).toGMTString()}`;
+			document.cookie = `title=${title};expires=${new Date((new Date()).getTime() + hours * 3600000)}.toGMTString()`;
+			document.querySelector("title").innerHTML = title;
+			if (Hls.isSupported()) {
+				let video = document.querySelector('#video');
+				let hls = new Hls();
+				hls.loadSource(m3u8);
+				hls.attachMedia(video);
+				hls.on(Hls.Events.MANIFEST_PARSED, function() {
+					video.play();
+				});
+			} else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+				video.src = m3u8;
+				video.addEventListener('canplay', function() {
+					video.play();
+				});
+			}
+			if (video.style.display != "block") {
+				video.style.display = "block";
+			}
+		} catch {}
+	}
+
+	function getPage() {
+		let cookies = document.cookie.split(";");
+		let page = 1;
+		for (let i = 0; i < cookies.length; i++) {
+			if (cookies[i].startsWith("page=")) {
+				page = parseInt(cookies[i].split('=')[1]);
+				break;
+			}
+		}
+		return page;
+	}
+
+	function getJson(page) {
+		mui("#page")[0].innerText = page.toString();
+		let hours = 10000;
+		document.cookie = `page=${page};expires=${new Date((new Date()).getTime() + hours * 3600000).toGMTString()};`;
+		let xml = new XMLHttpRequest();
+		xml.open("get", `json/${page}.txt`, false);
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4 && xml.status == 200) {
+				let json = xml.responseText;
+				let videos = JSON.parse(json);
+
+				let div = document.querySelector("#bl-videos");
+				div.innerHTML = "";
+				for (let i = 0; i < videos.length; i++) {
+					let video = videos[i];
+					let item = `
+						<div class="bl-card" onclick="selectVideo('${video.m3u8}','${video.title}');"  tag="${video.title}">
+							<img src=${video.jpg} />
+							<br />
+							<div class="bl-title">${video.title}</div>
+						</div>
+					`;
+					div.innerHTML += item;
+				}
+				div.innerHTML += "<div>*<br/><br/><br/><br/></div>"
+				mui.init();
+				buttionClickEvent();
+			}
+		};
+		xml.send();
+	}
+
+	function lastPage(page, firstPage) {
+		if (page > firstPage) {
+			return page - 1;
+		} else {
+			mui.alert("已经是首页");
+			return page;
+		}
+	}
+
+	function nextPage(page, tailPage) {
+		if (page < tailPage) {
+			return page + 1;
+		} else {
+			mui.alert("已经是尾页");
+			return page;
+		}
+	}
+
+	function jumpPage(page, firstPage, tailPage) {
+		mui.prompt(``, `${firstPage}~${tailPage}`, "页面跳转", ["确定", "取消"], (result) => {
+			if (result.index == 0) {
+				try {
+					let tempPage = parseInt(result.value);
+					if (tempPage != NaN) {
+						if (tempPage < firstPage || tempPage > tailPage) {
+							mui.alert(`范围应在[${firstPage}~${tailPage}]之间`);
+						} else {
+							nowPage = tempPage;
+							getJson(nowPage);
+						}
+					}
+				} catch {
+
+				}
+			}
+		});
+	}
+
+	function toggleVideo() {
+		try {
+			let video = document.querySelector('#video');
+			video.pause();
+			if (video.style.display == "block") {
+				video.style.display = "none";
+			} else {
+				video.style.display = "block";
+				video.play();
+			}
+		} catch {}
+	}
+
+	function buttionClickEvent() {
+		mui("a").each((index, item) => {
+			item.onclick = () => {
+				switch (item.innerText) {
+					case "<<":
+						nowPage = lastPage(nowPage, firstPage);
+						getJson(nowPage);
+						break;
+					case ">>":
+						nowPage = nextPage(nowPage, tailPage);
+						getJson(nowPage);
+						break;
+					case "跳转":
+						jumpPage(nowPage, firstPage, tailPage);
+						break;
+					case "收展":
+						toggleVideo();
+						break;
+				}
+			};
+		});
+	}
+</script>
